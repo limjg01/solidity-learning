@@ -1,129 +1,54 @@
-import hre from "hardhat";
-import { expect } from "chai";
-import { MyToken } from "../typechain-types";
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+// SPDX-License-Identifier: UNLICENSED
+pragma solidity ^0.8.28;
 
-const mintingAmount = 100n;
-const decimals = 18n;
+contract MyToken {
+    event Transfer(address indexed from, address indexed to, uint256 value);
+    event Approval(address indexed spender, uint256 amount);
 
-describe("My Token", () => {
-    let myTokenC: MyToken;
-    let signers: HardhatEthersSigner[];
+    string public name;
+    string public symbol;
+    uint8 public decimals;
 
-    beforeEach("should deploy", async () => {
-        signers = await hre.ethers.getSigners();
-        myTokenC = await hre.ethers.deployContract("MyToken", [
-            "MyToken",
-            "MT",
-            decimals,
-            mintingAmount,
-        ]);
-    });
+    uint256 public totalSupply;
+    mapping(address => uint256) public balanceOf;
+    mapping(address => mapping(address => uint256)) public allowance;
 
-    describe("Basic state value check", () => {
-        it("should check name", async () => {
-            expect(await myTokenC.name()).to.equal("MyToken");
-        });
+    constructor(
+        string memory _name,
+        string memory _symbol,
+        uint8 _decimals,
+        uint256 _amount
+    ) {
+        name = _name;
+        symbol = _symbol;
+        decimals = _decimals;
+        _mint(_amount * 10 ** uint256(_decimals), msg.sender);
+    }
 
-        it("should check symbol", async () => {
-            expect(await myTokenC.symbol()).to.equal("MT");
-        });
+    function _mint(uint256 amount, address owner) internal {
+        totalSupply += amount;
+        balanceOf[owner] += amount;
+        emit Transfer(address(0), owner, amount);
+    }
 
-        it("should check decimals", async () => {
-            expect(await myTokenC.decimals()).to.equal(decimals);
-        });
+    function transfer(address to, uint256 amount) external {
+        require(balanceOf[msg.sender] >= amount, "Insufficient balance");
+        balanceOf[msg.sender] -= amount;
+        balanceOf[to] += amount;
+        emit Transfer(msg.sender, to, amount);
+    }
 
-        it("should return 100 total supply", async () => {
-            expect(await myTokenC.totalSupply()).to.equal(mintingAmount * 10n ** decimals);
-        });
-    });
+    function approve(address spender, uint256 amount) external {
+        allowance[msg.sender][spender] = amount;
+        emit Approval(spender, amount);
+    }
 
-    describe("Mint", () => {
-        it("should return 100MT balance for signer 0", async () => {
-            const signer0 = signers[0];
-            expect(await myTokenC.balanceOf(signer0)).to.equal(mintingAmount * 10n ** decimals);
-        });
-    });
-
-    describe("Transfer", () => {
-        it("should have 0.5MT", async () => {
-            const signer0 = signers[0];
-            const signer1 = signers[1];
-
-            await expect(
-                myTokenC.transfer(signer1.address, hre.ethers.parseUnits("0.5", decimals))
-            ).to.emit(myTokenC, "Transfer").withArgs(
-                signer0.address,
-                signer1.address,
-                hre.ethers.parseUnits("0.5", decimals)
-            );
-
-            expect(await myTokenC.balanceOf(signer1)).to.equal(
-                hre.ethers.parseUnits("0.5", decimals)
-            );
-        });
-
-        it("should be rejected with insufficient balance error", async () => {
-            const signer1 = signers[1];
-            await expect(
-                myTokenC.transfer(
-                    signer1.address,
-                    hre.ethers.parseUnits((mintingAmount + 1n).toString(), decimals)
-                )
-            ).to.be.revertedWith("Insufficient balance");
-        });
-    });
-
-    describe("TransferFrom", () => {
-        it("should emit Approval event", async () => {
-            const signer1 = signers[1];
-            await expect(
-                myTokenC.approve(signer1.address, hre.ethers.parseUnits("10", decimals))
-            ).to.emit(myTokenC, "Approval").withArgs(
-                signer1.address,
-                hre.ethers.parseUnits("10", decimals)
-            );
-        });
-
-        it("should be reverted with insufficient allowance error", async () => {
-            const signer0 = signers[0];
-            const signer1 = signers[1];
-            await expect(
-                myTokenC.connect(signer1).transferFrom(
-                    signer0.address,
-                    signer1.address,
-                    hre.ethers.parseUnits("1", decimals)
-                )
-            ).to.be.revertedWith("Insufficient allowance");
-        });
-
-        it("should approve and transferFrom 10 MT, then check balances", async () => {
-            const signer0 = signers[0];
-            const signer1 = signers[1];
-            const transferAmount = hre.ethers.parseUnits("10", decimals);
-
-            // 1. approve: signer1에게 signer0의 자산 이동권한 부여
-            await myTokenC.approve(signer1.address, transferAmount);
-
-            // 2. transferFrom: signer1이 signer0의 MT토큰을 자신의 주소로 전송
-            await expect(
-                myTokenC.connect(signer1).transferFrom(
-                    signer0.address,
-                    signer1.address,
-                    transferAmount
-                )
-            ).to.emit(myTokenC, "Transfer").withArgs(
-                signer0.address,
-                signer1.address,
-                transferAmount
-            );
-
-            // 3. balance 확인
-            expect(await myTokenC.balanceOf(signer1.address)).to.equal(transferAmount);
-            expect(await myTokenC.balanceOf(signer0.address)).to.equal(
-                mintingAmount * 10n ** decimals - transferAmount
-            );
-            expect(await myTokenC.allowance(signer0.address, signer1.address)).to.equal(0n);
-        });
-    });
-});
+    function transferFrom(address from, address to, uint256 amount) external {
+        address spender = msg.sender;
+        require(allowance[from][spender] >= amount, "Insufficient allowance");
+        allowance[from][spender] -= amount;
+        balanceOf[from] -= amount;
+        balanceOf[to] += amount;
+        emit Transfer(from, to, amount);
+    }
+}
