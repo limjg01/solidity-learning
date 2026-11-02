@@ -30,3 +30,4 @@ contract TinyBank {
         emit Staked(msg.sender, _amount);
     }
 }
+
