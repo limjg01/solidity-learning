@@ -25,6 +25,10 @@ contract MyToken {
         _mint(_amount * 10 ** uint256(_decimals), msg.sender);
     }
 
+    function mint(uint256 amount, address owner) external {
+        _mint(amount, owner);
+    }
+
     function _mint(uint256 amount, address owner) internal {
         totalSupply += amount;
         balanceOf[owner] += amount;
